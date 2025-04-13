@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# WhatsApp tokens and session data
+/tokens/
+qr-code.png
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
