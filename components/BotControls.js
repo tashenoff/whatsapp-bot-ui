@@ -3,9 +3,8 @@ import { useState, useEffect } from 'react';
 export default function BotControls({ status, onStartBot }) {
     // Настройки текста для бота
     const [initialMessage, setInitialMessage] = useState('Здравствуйте, вы занимаетесь "{service}"?');
-    const [offerMessage, setOfferMessage] = useState(`Спасибо за ваш ответ! 
-  
-  Мы специализируемся на создании профессиональных сайтов для мастеров по ремонту бытовой техники. 
+    const [internetAdsQuestion, setInternetAdsQuestion] = useState('Спасибо за ответ! Скажите, вам интересна реклама вашего бизнеса в интернете?');
+    const [offerMessage, setOfferMessage] = useState(`Отлично! Мы специализируемся на создании профессиональных сайтов для мастеров по ремонту бытовой техники. 
   
   Наше предложение:
   ✅ Создание современного сайта с адаптивным дизайном
@@ -20,6 +19,9 @@ export default function BotControls({ status, onStartBot }) {
   Заинтересовало предложение?`);
     
     const [messageDelay, setMessageDelay] = useState(15);
+    const [adsQuestionDelay, setAdsQuestionDelay] = useState(15);
+    const [rejectionKeywords, setRejectionKeywords] = useState(["нет", "не интересно", "не надо", "не хочу", "не нужно", "дорого", "отказываюсь", "против"]);
+    const [rejectionKeywordsText, setRejectionKeywordsText] = useState("");
     const [loading, setLoading] = useState(true);
     const [restarting, setRestarting] = useState(false);
     const [resettingContacts, setResettingContacts] = useState(false);
@@ -31,6 +33,13 @@ export default function BotControls({ status, onStartBot }) {
       error: 0
     });
   
+    // Преобразование массива ключевых слов в текст при загрузке компонента
+    useEffect(() => {
+      if (rejectionKeywords && Array.isArray(rejectionKeywords) && rejectionKeywords.length > 0) {
+        setRejectionKeywordsText(rejectionKeywords.join(", "));
+      }
+    }, []);
+
     // Загружаем текущие настройки при монтировании компонента
     useEffect(() => {
       async function loadSettings() {
@@ -44,8 +53,15 @@ export default function BotControls({ status, onStartBot }) {
             const data = await response.json();
             if (data.success && data.settings) {
               setInitialMessage(data.settings.initialMessage || initialMessage);
+              setInternetAdsQuestion(data.settings.internetAdsQuestion || internetAdsQuestion);
               setOfferMessage(data.settings.offerMessage || offerMessage);
               setMessageDelay(data.settings.messageDelay || messageDelay);
+              setAdsQuestionDelay(data.settings.adsQuestionDelay || adsQuestionDelay);
+              
+              if (data.settings.rejectionKeywords && Array.isArray(data.settings.rejectionKeywords)) {
+                setRejectionKeywords(data.settings.rejectionKeywords);
+                setRejectionKeywordsText(data.settings.rejectionKeywords.join(", "));
+              }
             }
           }
         } catch (error) {
@@ -83,6 +99,19 @@ export default function BotControls({ status, onStartBot }) {
       };
     }, [status]);
   
+    // Обработка изменения текстового поля с ключевыми словами
+    const handleRejectionKeywordsChange = (e) => {
+      const text = e.target.value;
+      setRejectionKeywordsText(text);
+      
+      // Преобразуем текст в массив, удаляя лишние пробелы
+      const keywordsArray = text.split(',')
+        .map(keyword => keyword.trim())
+        .filter(keyword => keyword.length > 0);
+        
+      setRejectionKeywords(keywordsArray);
+    };
+
     // Сохранение настроек
     const saveSettings = async () => {
       try {
@@ -91,8 +120,11 @@ export default function BotControls({ status, onStartBot }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             initialMessage,
+            internetAdsQuestion,
             offerMessage,
-            messageDelay
+            messageDelay,
+            adsQuestionDelay,
+            rejectionKeywords
           })
         });
         
@@ -253,6 +285,34 @@ export default function BotControls({ status, onStartBot }) {
           </div>
           
           <div className="mb-3">
+            <label className="block text-gray-700 mb-2 text-sm" htmlFor="internetAdsQuestion">
+              Вопрос о рекламе в интернете
+            </label>
+            <textarea
+              id="internetAdsQuestion"
+              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
+              value={internetAdsQuestion}
+              onChange={(e) => setInternetAdsQuestion(e.target.value)}
+              rows="3"
+            ></textarea>
+          </div>
+          
+          <div className="mb-3">
+            <label className="block text-gray-700 mb-2 text-sm" htmlFor="rejectionKeywords">
+              Ключевые слова отказа от рекламы (через запятую)
+            </label>
+            <textarea
+              id="rejectionKeywords"
+              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
+              value={rejectionKeywordsText}
+              onChange={handleRejectionKeywordsChange}
+              rows="2"
+              placeholder="нет, не интересно, не надо, не хочу, не нужно, дорого, отказываюсь, против"
+            ></textarea>
+            <p className="text-xs text-gray-500 mt-1">Если ответ содержит одно из этих слов, предложение не будет отправлено</p>
+          </div>
+          
+          <div className="mb-3">
             <label className="block text-gray-700 mb-2 text-sm" htmlFor="offerMessage">
               Сообщение с предложением
             </label>
@@ -265,19 +325,36 @@ export default function BotControls({ status, onStartBot }) {
             ></textarea>
           </div>
           
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2 text-sm" htmlFor="messageDelay">
-              Задержка между сообщениями (секунды)
-            </label>
-            <input
-              type="number"
-              id="messageDelay"
-              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-              value={messageDelay}
-              onChange={(e) => setMessageDelay(parseInt(e.target.value) || 15)}
-              min="5"
-              max="60"
-            />
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-gray-700 mb-2 text-sm" htmlFor="messageDelay">
+                Задержка между сообщениями (секунды)
+              </label>
+              <input
+                type="number"
+                id="messageDelay"
+                className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
+                value={messageDelay}
+                onChange={(e) => setMessageDelay(parseInt(e.target.value) || 15)}
+                min="5"
+                max="60"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-gray-700 mb-2 text-sm" htmlFor="adsQuestionDelay">
+                Задержка перед вопросом о рекламе (секунды)
+              </label>
+              <input
+                type="number"
+                id="adsQuestionDelay"
+                className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
+                value={adsQuestionDelay}
+                onChange={(e) => setAdsQuestionDelay(parseInt(e.target.value) || 15)}
+                min="5"
+                max="300"
+              />
+            </div>
           </div>
           
           <button

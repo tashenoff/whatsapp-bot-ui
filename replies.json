@@ -21,6 +21,81 @@
         "message": "[Голосовое сообщение]",
         "type": "ptt",
         "timestamp": "2025-04-13T14:19:23.038Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:27:05.117Z"
+      },
+      {
+        "message": "Нет",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:28:28.724Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:30:07.062Z"
+      },
+      {
+        "message": "Нет",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:30:13.625Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:41:09.827Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:48:20.927Z"
+      },
+      {
+        "message": "Нет",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:48:27.227Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:50:58.265Z"
+      },
+      {
+        "message": "Нет",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:51:38.775Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:52:32.891Z"
+      },
+      {
+        "message": "Да",
+        "type": "chat",
+        "timestamp": "2025-04-15T08:52:41.551Z"
+      },
+      {
+        "message": "Здравствуйте",
+        "type": "chat",
+        "timestamp": "2025-04-15T09:06:36.003Z"
+      },
+      {
+        "message": "Ппппрп",
+        "type": "chat",
+        "timestamp": "2025-04-15T09:06:41.051Z"
+      },
+      {
+        "message": "Ппппп",
+        "type": "chat",
+        "timestamp": "2025-04-15T09:06:48.830Z"
+      },
+      {
+        "message": "Нет",
+        "type": "chat",
+        "timestamp": "2025-04-15T09:07:11.450Z"
       }
     ]
   }

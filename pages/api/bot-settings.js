@@ -18,9 +18,8 @@ export default function handler(req, res) {
           success: true, 
           settings: {
             initialMessage: 'Здравствуйте, вы занимаетесь "{service}"?',
-            offerMessage: `Спасибо за ваш ответ! 
-  
-Мы специализируемся на создании профессиональных сайтов для мастеров по ремонту бытовой техники. 
+            internetAdsQuestion: 'Спасибо за ответ! Скажите, вам интересна реклама вашего бизнеса в интернете?',
+            offerMessage: `Отлично! Мы специализируемся на создании профессиональных сайтов для мастеров по ремонту бытовой техники. 
 
 Наше предложение:
 ✅ Создание современного сайта с адаптивным дизайном
@@ -33,7 +32,9 @@ export default function handler(req, res) {
 Срок изготовления: 5-7 дней.
 
 Заинтересовало предложение?`,
-            messageDelay: 15
+            messageDelay: 15,
+            adsQuestionDelay: 15,
+            rejectionKeywords: ["нет", "не интересно", "не надо", "не хочу", "не нужно", "дорого", "отказываюсь", "против"]
           }
         });
       }
@@ -46,21 +47,26 @@ export default function handler(req, res) {
   // POST - сохранить настройки
   if (req.method === 'POST') {
     try {
-      const { initialMessage, offerMessage, messageDelay } = req.body;
+      const { initialMessage, internetAdsQuestion, offerMessage, messageDelay, adsQuestionDelay, rejectionKeywords } = req.body;
       
       // Проверяем наличие обязательных полей
-      if (!initialMessage || !offerMessage || !messageDelay) {
+      if (!initialMessage || !internetAdsQuestion || !offerMessage || !messageDelay || !adsQuestionDelay) {
         return res.status(400).json({ 
           success: false, 
-          error: 'Требуются все поля: initialMessage, offerMessage, messageDelay' 
+          error: 'Требуются все поля: initialMessage, internetAdsQuestion, offerMessage, messageDelay, adsQuestionDelay' 
         });
       }
       
       // Сохраняем настройки в JSON файл
       fs.writeFileSync(settingsPath, JSON.stringify({
         initialMessage,
+        internetAdsQuestion,
         offerMessage,
-        messageDelay
+        messageDelay,
+        adsQuestionDelay,
+        rejectionKeywords: Array.isArray(rejectionKeywords) ? rejectionKeywords : [
+          "нет", "не интересно", "не надо", "не хочу", "не нужно", "дорого", "отказываюсь", "против"
+        ]
       }, null, 2));
       
       res.status(200).json({ success: true });

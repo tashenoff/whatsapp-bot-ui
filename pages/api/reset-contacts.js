@@ -2,6 +2,7 @@
 // API для сброса статуса всех контактов
 import fs from 'fs';
 import path from 'path';
+import { resetUserDialogStates } from '../../utils/bot';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -24,7 +25,10 @@ export default async function handler(req, res) {
     // Сохраняем обновленный список контактов
     fs.writeFileSync(jsonFilePath, JSON.stringify(resetContacts, null, 2));
     
-    res.status(200).json({ success: true, message: 'Статус всех контактов сброшен' });
+    // Сбрасываем все состояния диалогов в боте
+    resetUserDialogStates();
+    
+    res.status(200).json({ success: true, message: 'Статус всех контактов и состояния диалогов сброшены' });
   } catch (error) {
     console.error('Ошибка при сбросе статуса контактов:', error);
     res.status(500).json({ success: false, error: error.message });

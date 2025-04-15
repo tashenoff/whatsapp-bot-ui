@@ -12,6 +12,18 @@ let messageProgress = {
   error: 0
 };
 
+// Объект для отслеживания состояния диалогов с пользователями
+// phoneNumber -> {stage: 'initial' | 'replied_to_initial' | 'ads_question_asked' | 'completed', adsQuestionSent: boolean}
+let userDialogState = {};
+
+// Проверяет, содержит ли сообщение пользователя ключевые слова отказа
+const containsRejectionKeyword = (message, keywords) => {
+  if (!message || !keywords || !Array.isArray(keywords)) return false;
+  
+  const lowerMsg = message.toLowerCase();
+  return keywords.some(keyword => lowerMsg.includes(keyword.toLowerCase()));
+};
+
 // Функция для получения текущих настроек бота
 const getBotSettings = () => {
   try {
@@ -27,8 +39,11 @@ const getBotSettings = () => {
   // Возвращаем настройки по умолчанию, если файл не найден или произошла ошибка
   return {
     initialMessage: 'Здравствуйте, вы занимаетесь "{service}"?',
-    offerMessage: 'Спасибо за ваш ответ!\n\nМы специализируемся на создании профессиональных сайтов...',
-    messageDelay: 15
+    internetAdsQuestion: 'Спасибо за ответ! Скажите, вам интересна реклама вашего бизнеса в интернете?',
+    offerMessage: 'Отлично! Мы специализируемся на создании профессиональных сайтов...',
+    messageDelay: 15,
+    adsQuestionDelay: 15,
+    rejectionKeywords: ["нет", "не интересно", "не надо", "не хочу", "не нужно", "дорого", "отказываюсь", "против"]
   };
 };
 
@@ -47,6 +62,22 @@ const ensureConnection = async (client) => {
     console.error('Ошибка при проверке соединения:', error);
     throw error;
   }
+};
+
+// Функция для отправки сообщения с задержкой
+const sendMessageWithDelay = async (client, to, message, delaySeconds) => {
+  return new Promise((resolve) => {
+    setTimeout(async () => {
+      try {
+        await ensureConnection(client);
+        const result = await client.sendText(to, message);
+        resolve(result);
+      } catch (error) {
+        console.error(`Ошибка при отправке сообщения для ${to}:`, error);
+        resolve(null);
+      }
+    }, delaySeconds * 1000);
+  });
 };
 
 const initializeBot = async () => {
@@ -203,10 +234,53 @@ const initializeBot = async () => {
           // Сохраняем обновленный список ответов
           fs.writeFileSync(repliesFilePath, JSON.stringify(replies, null, 2));
           
-          // Отправляем офер в ответ на любой тип сообщения
-          await ensureConnection(botClient);
-          await botClient.sendText(message.from, settings.offerMessage);
-          console.log(`Офер отправлен для ${message.from}`);
+          // Проверяем текущий этап диалога с пользователем
+          console.log(`Обработка сообщения для ${phoneNumber}, текущий этап:`, userDialogState[phoneNumber]?.stage || 'начальный', 
+                      'вопрос о рекламе отправлен:', userDialogState[phoneNumber]?.adsQuestionSent || false);
+          
+          if (!userDialogState[phoneNumber]) {
+            // Если это первое сообщение пользователя (после инициации диалога ботом)
+            // Инициализируем состояние диалога и планируем отправку вопроса о рекламе
+            userDialogState[phoneNumber] = { 
+              stage: 'replied_to_initial', 
+              adsQuestionSent: false 
+            };
+            
+            console.log(`Планирование отправки вопроса о рекламе для ${phoneNumber} через ${settings.adsQuestionDelay} секунд`);
+            
+            // Отправляем вопрос о рекламе с заданной задержкой
+            sendMessageWithDelay(botClient, message.from, settings.internetAdsQuestion, settings.adsQuestionDelay)
+              .then(() => {
+                console.log(`Вопрос о рекламе отправлен для ${message.from}`);
+                // Обновляем состояние после отправки вопроса
+                if (userDialogState[phoneNumber]) {
+                  userDialogState[phoneNumber].adsQuestionSent = true;
+                  userDialogState[phoneNumber].stage = 'ads_question_asked';
+                }
+              })
+              .catch(error => {
+                console.error(`Ошибка при отправке вопроса о рекламе для ${message.from}:`, error);
+              });
+          } 
+          else if (userDialogState[phoneNumber].stage === 'ads_question_asked' || 
+                  (userDialogState[phoneNumber].stage === 'replied_to_initial' && userDialogState[phoneNumber].adsQuestionSent)) {
+            // Пользователь ответил на вопрос о рекламе в интернете
+            if (message.type === 'chat' && containsRejectionKeyword(message.body, settings.rejectionKeywords)) {
+              // Если пользователь ответил отказом - не отправляем офер
+              userDialogState[phoneNumber].stage = 'completed';
+              console.log(`Пользователь ${message.from} отказался от рекламы в интернете`);
+            } else {
+              // Иначе отправляем офер
+              userDialogState[phoneNumber].stage = 'completed';
+              await ensureConnection(botClient);
+              await botClient.sendText(message.from, settings.offerMessage);
+              console.log(`Офер отправлен для ${message.from}`);
+            }
+          }
+          // Если вопрос уже отправлен или диалог завершен, просто логируем
+          else if (userDialogState[phoneNumber].stage === 'completed') {
+            console.log(`Диалог с ${phoneNumber} уже завершен, игнорируем сообщение`);
+          }
         } catch (error) {
           console.error(`Ошибка при обработке входящего сообщения для ${message.from}:`, error);
         }
@@ -296,6 +370,12 @@ const getReplies = () => {
   return [];
 };
 
+// Функция для сброса состояния диалогов
+const resetUserDialogStates = () => {
+  userDialogState = {};
+  console.log('Состояния диалогов сброшены');
+};
+
 // Функция для перезагрузки бота
 const restartBot = async () => {
   try {
@@ -310,6 +390,9 @@ const restartBot = async () => {
         console.error('Ошибка при остановке бота:', error);
       }
     }
+    
+    // Сбрасываем состояния диалогов при перезагрузке
+    resetUserDialogStates();
     
     // Сбрасываем переменные
     botClient = null;
@@ -335,5 +418,6 @@ module.exports = {
   restartBot,
   getMessageProgress,
   setMessageProgress,
-  getReplies
+  getReplies,
+  resetUserDialogStates
 };
