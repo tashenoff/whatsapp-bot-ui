@@ -14,30 +14,79 @@ export default function handler(req, res) {
       res.status(500).json({ success: false, error: 'Не удалось прочитать файл контактов' });
     }
   } 
-  // PUT - обновление статуса контакта
+  // PUT - обновление контакта или статуса
   else if (req.method === 'PUT') {
     try {
-      const { phoneNumber, status } = req.body;
+      const { phoneNumber, status, editContact } = req.body;
       
-      if (!phoneNumber || !status) {
-        return res.status(400).json({ success: false, error: 'Требуется номер телефона и статус' });
+      // Режим обновления статуса
+      if (phoneNumber && status && !editContact) {
+        const contacts = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
+        
+        const updatedContacts = contacts.map(contact => {
+          if (contact.number === phoneNumber) {
+            return { ...contact, messageStatus: status };
+          }
+          return contact;
+        });
+        
+        fs.writeFileSync(jsonFilePath, JSON.stringify(updatedContacts, null, 2));
+        
+        return res.status(200).json({ success: true });
       }
       
-      const contacts = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
-      
-      const updatedContacts = contacts.map(contact => {
-        if (contact.number === phoneNumber) {
-          return { ...contact, messageStatus: status };
+      // Режим редактирования контакта
+      if (editContact) {
+        const { oldNumber, newNumber, newLink, newLinkHref } = editContact;
+        
+        if (!oldNumber || !newNumber || !newLink) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Для редактирования требуются старый номер, новый номер и описание' 
+          });
         }
-        return contact;
+        
+        const contacts = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
+        
+        // Проверка на существование нового номера (если он отличается от старого)
+        if (oldNumber !== newNumber) {
+          const numberExists = contacts.some(contact => 
+            contact.number === newNumber && contact.number !== oldNumber
+          );
+          
+          if (numberExists) {
+            return res.status(400).json({ 
+              success: false, 
+              error: 'Контакт с таким номером уже существует' 
+            });
+          }
+        }
+        
+        // Обновление контакта
+        const updatedContacts = contacts.map(contact => {
+          if (contact.number === oldNumber) {
+            return { 
+              ...contact, 
+              number: newNumber,
+              link: newLink,
+              "link-href": newLinkHref || contact["link-href"] || ""
+            };
+          }
+          return contact;
+        });
+        
+        fs.writeFileSync(jsonFilePath, JSON.stringify(updatedContacts, null, 2));
+        
+        return res.status(200).json({ success: true });
+      }
+      
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Неверные параметры для обновления' 
       });
-      
-      fs.writeFileSync(jsonFilePath, JSON.stringify(updatedContacts, null, 2));
-      
-      res.status(200).json({ success: true });
     } catch (error) {
-      console.error('Ошибка при обновлении статуса контакта:', error);
-      res.status(500).json({ success: false, error: 'Не удалось обновить статус контакта' });
+      console.error('Ошибка при обновлении контакта:', error);
+      res.status(500).json({ success: false, error: 'Не удалось обновить контакт' });
     }
   } 
   // POST - добавление нового контакта

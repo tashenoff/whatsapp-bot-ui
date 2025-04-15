@@ -9,6 +9,7 @@ export default function ContactsManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newContact, setNewContact] = useState({ number: '', link: '', linkHref: '' });
+  const [editingContact, setEditingContact] = useState(null);
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -41,7 +42,84 @@ export default function ContactsManager() {
   // Обработка изменений в форме
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewContact(prev => ({ ...prev, [name]: value }));
+    if (editingContact) {
+      setEditingContact(prev => ({ ...prev, [name]: value }));
+    } else {
+      setNewContact(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  // Начало редактирования контакта
+  const handleEditClick = (contact) => {
+    setEditingContact({
+      oldNumber: contact.number,
+      newNumber: contact.number,
+      newLink: contact.link,
+      newLinkHref: contact["link-href"] || ""
+    });
+    
+    // Сброс формы добавления контакта
+    setNewContact({ number: '', link: '', linkHref: '' });
+    setFormError('');
+    setSuccessMessage('');
+  };
+
+  // Отмена редактирования
+  const handleCancelEdit = () => {
+    setEditingContact(null);
+    setFormError('');
+  };
+
+  // Обновление контакта
+  const handleUpdateContact = async (e) => {
+    e.preventDefault();
+    
+    // Валидация формы
+    if (!editingContact.newNumber || !editingContact.newLink) {
+      setFormError('Номер телефона и описание обязательны для заполнения');
+      return;
+    }
+
+    // Проверка формата номера телефона (11 цифр)
+    const phoneRegex = /^\d{11}$/;
+    if (!phoneRegex.test(editingContact.newNumber)) {
+      setFormError('Номер телефона должен содержать 11 цифр');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/contacts', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          editContact: editingContact
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // Очистка формы и отображение сообщения об успехе
+        setEditingContact(null);
+        setFormError('');
+        setSuccessMessage('Контакт успешно обновлен');
+        
+        // Обновление списка контактов
+        fetchContacts();
+        
+        // Скрытие сообщения об успехе через 3 секунды
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 3000);
+      } else {
+        setFormError(data.error || 'Не удалось обновить контакт');
+      }
+    } catch (error) {
+      console.error('Ошибка при обновлении контакта:', error);
+      setFormError('Ошибка при обновлении контакта');
+    }
   };
 
   // Добавление нового контакта
@@ -144,9 +222,11 @@ export default function ContactsManager() {
           </Link>
         </div>
 
-        {/* Форма добавления контакта */}
+        {/* Форма добавления/редактирования контакта */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8 transition-colors duration-200">
-          <h2 className="text-xl font-semibold mb-4 dark:text-white">Добавить новый контакт</h2>
+          <h2 className="text-xl font-semibold mb-4 dark:text-white">
+            {editingContact ? 'Редактировать контакт' : 'Добавить новый контакт'}
+          </h2>
           
           {formError && (
             <div className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 p-3 rounded mb-4">
@@ -160,59 +240,126 @@ export default function ContactsManager() {
             </div>
           )}
           
-          <form onSubmit={handleAddContact} className="space-y-4">
-            <div>
-              <label htmlFor="number" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Номер телефона (11 цифр)
-              </label>
-              <input
-                type="text"
-                id="number"
-                name="number"
-                value={newContact.number}
-                onChange={handleInputChange}
-                placeholder="77001234567"
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="link" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Описание
-              </label>
-              <input
-                type="text"
-                id="link"
-                name="link"
-                value={newContact.link}
-                onChange={handleInputChange}
-                placeholder="Описание контакта"
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="linkHref" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Ссылка (необязательно)
-              </label>
-              <input
-                type="text"
-                id="linkHref"
-                name="linkHref"
-                value={newContact.linkHref}
-                onChange={handleInputChange}
-                placeholder="https://example.com"
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            
-            <button
-              type="submit"
-              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded hover:bg-green-700 dark:hover:bg-green-800 transition"
-            >
-              Добавить
-            </button>
-          </form>
+          {editingContact ? (
+            // Форма редактирования
+            <form onSubmit={handleUpdateContact} className="space-y-4">
+              <div>
+                <label htmlFor="newNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Номер телефона (11 цифр)
+                </label>
+                <input
+                  type="text"
+                  id="newNumber"
+                  name="newNumber"
+                  value={editingContact.newNumber}
+                  onChange={handleInputChange}
+                  placeholder="77001234567"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="newLink" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Описание
+                </label>
+                <input
+                  type="text"
+                  id="newLink"
+                  name="newLink"
+                  value={editingContact.newLink}
+                  onChange={handleInputChange}
+                  placeholder="Описание контакта"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="newLinkHref" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Ссылка (необязательно)
+                </label>
+                <input
+                  type="text"
+                  id="newLinkHref"
+                  name="newLinkHref"
+                  value={editingContact.newLinkHref}
+                  onChange={handleInputChange}
+                  placeholder="https://example.com"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition"
+                >
+                  Сохранить
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 transition"
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+          ) : (
+            // Форма добавления
+            <form onSubmit={handleAddContact} className="space-y-4">
+              <div>
+                <label htmlFor="number" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Номер телефона (11 цифр)
+                </label>
+                <input
+                  type="text"
+                  id="number"
+                  name="number"
+                  value={newContact.number}
+                  onChange={handleInputChange}
+                  placeholder="77001234567"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="link" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Описание
+                </label>
+                <input
+                  type="text"
+                  id="link"
+                  name="link"
+                  value={newContact.link}
+                  onChange={handleInputChange}
+                  placeholder="Описание контакта"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="linkHref" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Ссылка (необязательно)
+                </label>
+                <input
+                  type="text"
+                  id="linkHref"
+                  name="linkHref"
+                  value={newContact.linkHref}
+                  onChange={handleInputChange}
+                  placeholder="https://example.com"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <button
+                type="submit"
+                className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded hover:bg-green-700 dark:hover:bg-green-800 transition"
+              >
+                Добавить
+              </button>
+            </form>
+          )}
         </div>
         
         {/* Список контактов */}
@@ -279,12 +426,20 @@ export default function ContactsManager() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleDeleteContact(contact.number)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                        >
-                          Удалить
-                        </button>
+                        <div className="flex justify-end space-x-3">
+                          <button
+                            onClick={() => handleEditClick(contact)}
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
+                          >
+                            Редактировать
+                          </button>
+                          <button
+                            onClick={() => handleDeleteContact(contact.number)}
+                            className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                          >
+                            Удалить
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
