@@ -222,7 +222,7 @@ const initializeBot = async () => {
               phoneNumber,
               contactName,
               serviceType,
-              status: 'replied',
+              status: 'replied', // Начальный статус: ответил на первое сообщение
               replies: [{
                 message: messageContent,
                 type: messageType,
@@ -268,10 +268,26 @@ const initializeBot = async () => {
             if (message.type === 'chat' && containsRejectionKeyword(message.body, settings.rejectionKeywords)) {
               // Если пользователь ответил отказом - не отправляем офер
               userDialogState[phoneNumber].stage = 'completed';
+              
+              // Обновляем статус в replies.json, что пользователь отказался
+              const replyIndex = replies.findIndex(r => r.phoneNumber === phoneNumber);
+              if (replyIndex >= 0) {
+                replies[replyIndex].status = 'rejected';
+                fs.writeFileSync(repliesFilePath, JSON.stringify(replies, null, 2));
+              }
+              
               console.log(`Пользователь ${message.from} отказался от рекламы в интернете`);
             } else {
               // Иначе отправляем офер
               userDialogState[phoneNumber].stage = 'completed';
+              
+              // Обновляем статус в replies.json, что пользователь согласился
+              const replyIndex = replies.findIndex(r => r.phoneNumber === phoneNumber);
+              if (replyIndex >= 0) {
+                replies[replyIndex].status = 'accepted';
+                fs.writeFileSync(repliesFilePath, JSON.stringify(replies, null, 2));
+              }
+              
               await ensureConnection(botClient);
               await botClient.sendText(message.from, settings.offerMessage);
               console.log(`Офер отправлен для ${message.from}`);
@@ -410,6 +426,74 @@ const restartBot = async () => {
   }
 };
 
+// Функция для получения статистики
+const getStatistics = () => {
+  try {
+    const repliesFilePath = path.join(process.cwd(), 'replies.json');
+    const contactsFilePath = path.join(process.cwd(), 'base.json');
+    
+    let replies = [];
+    let contacts = [];
+    
+    if (fs.existsSync(repliesFilePath)) {
+      replies = JSON.parse(fs.readFileSync(repliesFilePath, 'utf8'));
+    }
+    
+    if (fs.existsSync(contactsFilePath)) {
+      contacts = JSON.parse(fs.readFileSync(contactsFilePath, 'utf8'));
+    }
+    
+    const stats = {
+      totalMessages: contacts.filter(c => c.messageStatus === 'sent').length,
+      totalReplies: replies.length,
+      adsRejected: replies.filter(r => r.status === 'rejected').length,
+      adsAccepted: replies.filter(r => r.status === 'accepted').length,
+      byNiche: {}
+    };
+    
+    // Создаем справочник контактов по номеру телефона
+    const contactsMap = {};
+    contacts.forEach(contact => {
+      if (contact.number) {
+        contactsMap[contact.number] = contact;
+      }
+    });
+    
+    // Анализируем ответы по нишам
+    replies.forEach(reply => {
+      const contact = contactsMap[reply.phoneNumber];
+      const nicheName = contact?.link || reply.serviceType || 'Неизвестная ниша';
+      
+      if (!stats.byNiche[nicheName]) {
+        stats.byNiche[nicheName] = {
+          total: 0,
+          accepted: 0,
+          rejected: 0
+        };
+      }
+      
+      stats.byNiche[nicheName].total++;
+      
+      if (reply.status === 'rejected') {
+        stats.byNiche[nicheName].rejected++;
+      } else if (reply.status === 'accepted') {
+        stats.byNiche[nicheName].accepted++;
+      }
+    });
+    
+    return stats;
+  } catch (error) {
+    console.error('Ошибка при расчете статистики:', error);
+    return {
+      totalMessages: 0,
+      totalReplies: 0,
+      adsRejected: 0,
+      adsAccepted: 0,
+      byNiche: {}
+    };
+  }
+};
+
 module.exports = { 
   initializeBot, 
   getBotClient, 
@@ -419,5 +503,6 @@ module.exports = {
   getMessageProgress,
   setMessageProgress,
   getReplies,
-  resetUserDialogStates
+  resetUserDialogStates,
+  getStatistics
 };

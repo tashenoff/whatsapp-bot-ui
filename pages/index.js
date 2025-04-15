@@ -4,7 +4,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Layout from '../components/Layout';
 import ContactList from '../components/ContactList';
-import SendMessageForm from '../components/SendMessageForm';
+import BotStatistics from '../components/SendMessageForm'; // Компонент переименован, но файл оставлен тем же
 import BotControls from '../components/BotControls';
 
 export default function Home() {
@@ -75,35 +75,6 @@ export default function Home() {
     }
   };
 
-  // Функция отправки сообщения
-  const sendMessage = async (phoneNumber, message) => {
-    try {
-      const res = await fetch('/api/send-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber, message })
-      });
-      
-      const data = await res.json();
-      
-      if (data.success) {
-        // Обновляем статус контакта в списке
-        setContacts(contacts.map(contact => 
-          contact.number === phoneNumber 
-            ? { ...contact, messageStatus: 'sent', messageSentDate: new Date().toISOString() } 
-            : contact
-        ));
-        return true;
-      } else {
-        alert('Ошибка при отправке сообщения: ' + data.error);
-        return false;
-      }
-    } catch (error) {
-      console.error('Ошибка при отправке сообщения:', error);
-      return false;
-    }
-  };
-
   // Функция обновления статуса контакта
   const updateContactStatus = async (phoneNumber, status) => {
     try {
@@ -142,16 +113,16 @@ export default function Home() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-red-500">WhatsApp Bot Manager</h1>
-          <Link href="/replies" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+          <h1 className="text-3xl font-bold text-red-500 dark:text-red-400">WhatsApp Bot Manager</h1>
+          <Link href="/replies" className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition">
             Просмотр ответов
           </Link>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Левая колонка - Список контактов */}
-          <div className="md:col-span-1 bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4">Контакты</h2>
+          <div className="md:col-span-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 transition-colors duration-200">
+            <h2 className="text-xl font-semibold mb-4 dark:text-white">Контакты</h2>
             <ContactList 
               contacts={contacts} 
               loading={loading} 
@@ -160,18 +131,15 @@ export default function Home() {
             />
           </div>
           
-          {/* Средняя колонка - Форма отправки сообщений */}
-          <div className="md:col-span-1 bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4">Отправка сообщения</h2>
-            <SendMessageForm 
-              selectedContact={selectedContact}
-              onSendMessage={sendMessage}
-            />
+          {/* Средняя колонка - Статистика */}
+          <div className="md:col-span-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 transition-colors duration-200">
+            <h2 className="text-xl font-semibold mb-4 dark:text-white">Статистика</h2>
+            <BotStatistics />
           </div>
           
           {/* Правая колонка - Управление ботом */}
-          <div className="md:col-span-1 bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4">Управление ботом</h2>
+          <div className="md:col-span-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 transition-colors duration-200">
+            <h2 className="text-xl font-semibold mb-4 dark:text-white">Управление ботом</h2>
             <BotControls 
               status={botStatus}
               onStartBot={startBot}
