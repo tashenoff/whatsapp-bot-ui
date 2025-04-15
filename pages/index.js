@@ -114,9 +114,14 @@ export default function Home() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-red-500 dark:text-red-400">WhatsApp Bot Manager</h1>
-          <Link href="/replies" className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition">
-            Просмотр ответов
-          </Link>
+          <div className="flex space-x-2">
+            <Link href="/contacts" className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+              Управление контактами
+            </Link>
+            <Link href="/replies" className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition">
+              Просмотр ответов
+            </Link>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
