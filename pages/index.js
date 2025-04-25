@@ -57,10 +57,14 @@ export default function Home() {
   }, []);
 
   // Функция запуска бота
-  const startBot = async () => {
+  const startBot = async (options = {}) => {
     try {
       setBotStatus('starting');
-      const res = await fetch('/api/start-bot', { method: 'POST' });
+      const res = await fetch('/api/start-bot', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options)
+      });
       const data = await res.json();
       
       if (data.success) {
@@ -121,6 +125,9 @@ export default function Home() {
             <Link href="/replies" className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-800 transition">
               Просмотр ответов
             </Link>
+            <Link href="/message-settings" className="px-4 py-2 bg-indigo-600 dark:bg-indigo-700 text-white rounded hover:bg-indigo-700 dark:hover:bg-indigo-800 transition">
+              Настройки сообщений
+            </Link>
           </div>
         </div>
         
@@ -148,6 +155,7 @@ export default function Home() {
             <BotControls 
               status={botStatus}
               onStartBot={startBot}
+              totalContacts={contacts.length}
             />
           </div>
         </div>

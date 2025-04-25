@@ -1,30 +1,11 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 // Файл: components/BotControls.js
-export default function BotControls({ status, onStartBot }) {
-    // Настройки текста для бота
-    const [initialMessage, setInitialMessage] = useState('Здравствуйте, вы занимаетесь "{service}"?');
-    const [internetAdsQuestion, setInternetAdsQuestion] = useState('Спасибо за ответ! Скажите, вам интересна реклама вашего бизнеса в интернете?');
-    const [offerMessage, setOfferMessage] = useState(`Отлично! Мы специализируемся на создании профессиональных сайтов для мастеров по ремонту бытовой техники. 
-  
-  Наше предложение:
-  ✅ Создание современного сайта с адаптивным дизайном
-  ✅ SEO-оптимизация для лучшей видимости в поисковиках
-  ✅ Форма для онлайн-записи клиентов
-  ✅ Интеграция с WhatsApp и другими мессенджерами
-  ✅ Техническая поддержка сайта
-  
-  Стоимость от 30,000 тг.
-  Срок изготовления: 5-7 дней.
-  
-  Заинтересовало предложение?`);
-    
-    const [messageDelay, setMessageDelay] = useState(15);
-    const [adsQuestionDelay, setAdsQuestionDelay] = useState(15);
-    const [rejectionKeywords, setRejectionKeywords] = useState(["нет", "не интересно", "не надо", "не хочу", "не нужно", "дорого", "отказываюсь", "против"]);
-    const [rejectionKeywordsText, setRejectionKeywordsText] = useState("");
-    const [loading, setLoading] = useState(true);
+export default function BotControls({ status, onStartBot, totalContacts = 0 }) {
     const [restarting, setRestarting] = useState(false);
     const [resettingContacts, setResettingContacts] = useState(false);
+    const [contactLimit, setContactLimit] = useState(0); // 0 означает "все контакты"
+    const [useContactLimit, setUseContactLimit] = useState(false);
     
     // Состояние для отслеживания прогресса рассылки
     const [progress, setProgress] = useState({
@@ -32,47 +13,6 @@ export default function BotControls({ status, onStartBot }) {
       sent: 0,
       error: 0
     });
-  
-    // Преобразование массива ключевых слов в текст при загрузке компонента
-    useEffect(() => {
-      if (rejectionKeywords && Array.isArray(rejectionKeywords) && rejectionKeywords.length > 0) {
-        setRejectionKeywordsText(rejectionKeywords.join(", "));
-      }
-    }, []);
-
-    // Загружаем текущие настройки при монтировании компонента
-    useEffect(() => {
-      async function loadSettings() {
-        try {
-          setLoading(true);
-          const response = await fetch('/api/bot-settings', {
-            method: 'GET'
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.settings) {
-              setInitialMessage(data.settings.initialMessage || initialMessage);
-              setInternetAdsQuestion(data.settings.internetAdsQuestion || internetAdsQuestion);
-              setOfferMessage(data.settings.offerMessage || offerMessage);
-              setMessageDelay(data.settings.messageDelay || messageDelay);
-              setAdsQuestionDelay(data.settings.adsQuestionDelay || adsQuestionDelay);
-              
-              if (data.settings.rejectionKeywords && Array.isArray(data.settings.rejectionKeywords)) {
-                setRejectionKeywords(data.settings.rejectionKeywords);
-                setRejectionKeywordsText(data.settings.rejectionKeywords.join(", "));
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка при загрузке настроек:', error);
-        } finally {
-          setLoading(false);
-        }
-      }
-      
-      loadSettings();
-    }, []);
     
     // Периодически получаем прогресс рассылки
     useEffect(() => {
@@ -98,47 +38,11 @@ export default function BotControls({ status, onStartBot }) {
         if (interval) clearInterval(interval);
       };
     }, [status]);
-  
-    // Обработка изменения текстового поля с ключевыми словами
-    const handleRejectionKeywordsChange = (e) => {
-      const text = e.target.value;
-      setRejectionKeywordsText(text);
-      
-      // Преобразуем текст в массив, удаляя лишние пробелы
-      const keywordsArray = text.split(',')
-        .map(keyword => keyword.trim())
-        .filter(keyword => keyword.length > 0);
-        
-      setRejectionKeywords(keywordsArray);
-    };
-
-    // Сохранение настроек
-    const saveSettings = async () => {
-      try {
-        const res = await fetch('/api/bot-settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            initialMessage,
-            internetAdsQuestion,
-            offerMessage,
-            messageDelay,
-            adsQuestionDelay,
-            rejectionKeywords
-          })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
-          alert('Настройки сохранены');
-        } else {
-          alert('Ошибка при сохранении настроек: ' + data.error);
-        }
-      } catch (error) {
-        console.error('Ошибка при сохранении настроек:', error);
-        alert('Ошибка при сохранении настроек');
-      }
+    
+    // Обработчик запуска бота с ограничением контактов
+    const handleStartBot = () => {
+      const options = useContactLimit ? { contactLimit } : {};
+      onStartBot(options);
     };
     
     // Перезагрузка бота
@@ -190,10 +94,12 @@ export default function BotControls({ status, onStartBot }) {
         }
       }
     };
-  
-    if (loading) {
-      return <div className="text-center py-4">Загрузка настроек...</div>;
-    }
+    
+    // Обработка изменения количества контактов
+    const handleContactLimitChange = (e) => {
+      const value = parseInt(e.target.value) || 0;
+      setContactLimit(value > totalContacts ? totalContacts : value);
+    };
     
     // Вычисляем прогресс в процентах
     const progressPercent = progress.total > 0 
@@ -215,16 +121,51 @@ export default function BotControls({ status, onStartBot }) {
             </div>
           </div>
           
+          {/* Настройки ограничения контактов */}
+          {status !== 'running' && status !== 'starting' && (
+            <div className="mb-4 p-3 border rounded bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+              <div className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  id="useContactLimit"
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  checked={useContactLimit}
+                  onChange={(e) => setUseContactLimit(e.target.checked)}
+                />
+                <label htmlFor="useContactLimit" className="ml-2 text-sm font-medium">
+                  Ограничить количество контактов
+                </label>
+              </div>
+              
+              {useContactLimit && (
+                <div className="flex items-center">
+                  <input
+                    type="number"
+                    id="contactLimit"
+                    className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
+                    value={contactLimit}
+                    onChange={handleContactLimitChange}
+                    min="1"
+                    max={totalContacts}
+                  />
+                  <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">из {totalContacts}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 gap-2 mb-4">
             <button
-              onClick={onStartBot}
+              onClick={handleStartBot}
               disabled={status === 'running' || status === 'starting' || restarting}
               className={`py-2 px-4 rounded text-white 
                 ${status === 'running' || status === 'starting' || restarting
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-green-600 hover:bg-green-700'}`}
             >
-              Запустить бота
+              {useContactLimit && contactLimit > 0 
+                ? `Запустить (${contactLimit} контактов)` 
+                : 'Запустить бота'}
             </button>
             
             <button
@@ -268,102 +209,19 @@ export default function BotControls({ status, onStartBot }) {
         </div>
         
         <div className="border-t pt-4">
-          <h3 className="font-medium mb-3">Настройки сообщений</h3>
-          
-          <div className="mb-3">
-            <label className="block text-gray-700 mb-2 text-sm" htmlFor="initialMessage">
-              Первое сообщение
-            </label>
-            <textarea
-              id="initialMessage"
-              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-              value={initialMessage}
-              onChange={(e) => setInitialMessage(e.target.value)}
-              rows="3"
-            ></textarea>
-            <p className="text-xs text-gray-500 mt-1">Используйте {"{service}"} для вставки услуги</p>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-medium">Настройки сообщений</h3>
+            <Link 
+              href="/message-settings" 
+              className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 transition"
+            >
+              Редактировать сообщения
+            </Link>
           </div>
-          
-          <div className="mb-3">
-            <label className="block text-gray-700 mb-2 text-sm" htmlFor="internetAdsQuestion">
-              Вопрос о рекламе в интернете
-            </label>
-            <textarea
-              id="internetAdsQuestion"
-              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-              value={internetAdsQuestion}
-              onChange={(e) => setInternetAdsQuestion(e.target.value)}
-              rows="3"
-            ></textarea>
-          </div>
-          
-          <div className="mb-3">
-            <label className="block text-gray-700 mb-2 text-sm" htmlFor="rejectionKeywords">
-              Ключевые слова отказа от рекламы (через запятую)
-            </label>
-            <textarea
-              id="rejectionKeywords"
-              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-              value={rejectionKeywordsText}
-              onChange={handleRejectionKeywordsChange}
-              rows="2"
-              placeholder="нет, не интересно, не надо, не хочу, не нужно, дорого, отказываюсь, против"
-            ></textarea>
-            <p className="text-xs text-gray-500 mt-1">Если ответ содержит одно из этих слов, предложение не будет отправлено</p>
-          </div>
-          
-          <div className="mb-3">
-            <label className="block text-gray-700 mb-2 text-sm" htmlFor="offerMessage">
-              Сообщение с предложением
-            </label>
-            <textarea
-              id="offerMessage"
-              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-              value={offerMessage}
-              onChange={(e) => setOfferMessage(e.target.value)}
-              rows="5"
-            ></textarea>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-gray-700 mb-2 text-sm" htmlFor="messageDelay">
-                Задержка между сообщениями (секунды)
-              </label>
-              <input
-                type="number"
-                id="messageDelay"
-                className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-                value={messageDelay}
-                onChange={(e) => setMessageDelay(parseInt(e.target.value) || 15)}
-                min="5"
-                max="60"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-gray-700 mb-2 text-sm" htmlFor="adsQuestionDelay">
-                Задержка перед вопросом о рекламе (секунды)
-              </label>
-              <input
-                type="number"
-                id="adsQuestionDelay"
-                className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring focus:border-blue-300"
-                value={adsQuestionDelay}
-                onChange={(e) => setAdsQuestionDelay(parseInt(e.target.value) || 15)}
-                min="5"
-                max="300"
-              />
-            </div>
-          </div>
-          
-          <button
-            onClick={saveSettings}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 focus:outline-none focus:ring"
-          >
-            Сохранить настройки
-          </button>
+          <p className="text-sm text-gray-600 mb-4">
+            Настройте шаблоны сообщений, задержки и ключевые слова для рассылки на странице настроек сообщений.
+          </p>
         </div>
       </div>
     );
-  }
+}

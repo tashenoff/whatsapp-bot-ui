@@ -13,23 +13,42 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Получаем опции из запроса
+    const options = req.body || {};
+    const contactLimit = options.contactLimit || 0;
+
     const client = await initializeBot();
     
     const jsonFilePath = path.join(process.cwd(), 'base.json');
-    const contacts = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
+    const allContacts = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
     
     // Получаем список контактов, для которых сообщение еще не отправлено
-    const pendingContacts = contacts.filter(contact => contact.messageStatus !== 'sent');
+    const pendingContacts = allContacts.filter(contact => contact.messageStatus !== 'sent');
+    
+    // Выбираем контакты для обработки
+    let contactsToProcess = pendingContacts;
+    
+    // Ограничиваем число контактов для текущей сессии, если указан лимит
+    if (contactLimit > 0 && pendingContacts.length > contactLimit) {
+      contactsToProcess = pendingContacts.slice(0, contactLimit);
+      console.log(`Применено ограничение: будет обработано только ${contactLimit} контактов из ${pendingContacts.length} ожидающих`);
+    }
+    
+    // Получаем список контактов, которые уже были обработаны
+    const processedContacts = allContacts.filter(contact => contact.messageStatus === 'sent');
+    
+    // Отображаем в прогрессе только контакты, которые уже обработаны + те, которые будем обрабатывать в этой сессии
+    const totalContactsForProgress = processedContacts.length + contactsToProcess.length;
     
     // Устанавливаем начальный прогресс
     setMessageProgress({ 
-      total: contacts.length,
-      sent: contacts.length - pendingContacts.length,
-      error: 0
+      total: totalContactsForProgress,
+      sent: processedContacts.length,
+      error: allContacts.filter(c => c.messageStatus === 'error').length
     });
     
     // Запускаем рассылку в фоновом режиме
-    sendMessagesInBackground(client, contacts, jsonFilePath)
+    sendMessagesInBackground(client, allContacts, contactsToProcess, jsonFilePath)
       .catch(error => {
         console.error('Ошибка при массовой рассылке:', error);
       });
@@ -41,26 +60,30 @@ export default async function handler(req, res) {
   }
 }
 
-async function sendMessagesInBackground(client, contacts, jsonFilePath) {
+async function sendMessagesInBackground(client, allContacts, contactsToProcess, jsonFilePath) {
   // Получаем настройки бота из JSON-файла
   const settings = getBotSettings();
   const messageDelay = settings.messageDelay * 1000; // переводим в миллисекунды
   
-  // Получаем список контактов, для которых сообщение еще не отправлено
-  const pendingContacts = contacts.filter(contact => contact.messageStatus !== 'sent');
+  // Получаем текущие счетчики для прогресса
+  const totalForProgress = contactsToProcess.length + allContacts.filter(c => c.messageStatus === 'sent').length;
+  const sentCount = allContacts.filter(c => c.messageStatus === 'sent').length;
+  const errorCount = allContacts.filter(c => c.messageStatus === 'error').length;
 
-  // Обновляем прогресс
+  // Обновляем прогресс перед началом
   setMessageProgress({ 
-    total: contacts.length, 
-    sent: contacts.length - pendingContacts.length, 
-    error: contacts.filter(c => c.messageStatus === 'error').length 
+    total: totalForProgress, 
+    sent: sentCount, 
+    error: errorCount 
   });
 
-  for (let i = 0; i < contacts.length; i++) {
-    const contact = contacts[i];
+  // Обрабатываем только выбранные контакты
+  for (let i = 0; i < contactsToProcess.length; i++) {
+    const contact = contactsToProcess[i];
+    const contactIndex = allContacts.findIndex(c => c.number === contact.number);
     
-    if (contact.messageStatus === 'sent') {
-      console.log(`Пропускаем ${contact.number}, сообщение уже отправлено ранее`);
+    if (contactIndex === -1) {
+      console.log(`Контакт ${contact.number} не найден в полном списке, пропускаем`);
       continue;
     }
     
@@ -69,41 +92,47 @@ async function sendMessagesInBackground(client, contacts, jsonFilePath) {
     const initialMessage = settings.initialMessage.replace('{service}', contact.link);
     
     try {
-      console.log(`Отправка ${i+1}/${contacts.length} на номер ${contact.number}: ${initialMessage}`);
+      console.log(`Отправка ${i+1}/${contactsToProcess.length} на номер ${contact.number}: ${initialMessage}`);
       await client.sendText(phoneNumber, initialMessage);
       
-      contact.messageStatus = 'sent';
-      contact.messageSentDate = new Date().toISOString();
+      // Обновляем статус в полном списке контактов
+      allContacts[contactIndex].messageStatus = 'sent';
+      allContacts[contactIndex].messageSentDate = new Date().toISOString();
       
-      fs.writeFileSync(jsonFilePath, JSON.stringify(contacts, null, 2));
+      // Сохраняем полный список контактов в JSON-файл
+      fs.writeFileSync(jsonFilePath, JSON.stringify(allContacts, null, 2));
       
       // Обновляем прогресс после каждой отправки
-      const sentCount = contacts.filter(c => c.messageStatus === 'sent').length;
-      const errorCount = contacts.filter(c => c.messageStatus === 'error').length;
+      const currentSentCount = allContacts.filter(c => c.messageStatus === 'sent').length;
+      const currentErrorCount = allContacts.filter(c => c.messageStatus === 'error').length;
       
       setMessageProgress({ 
-        total: contacts.length, 
-        sent: sentCount, 
-        error: errorCount 
+        total: totalForProgress, 
+        sent: currentSentCount, 
+        error: currentErrorCount 
       });
       
-      if (i < contacts.length - 1) {
+      if (i < contactsToProcess.length - 1) {
         await new Promise(resolve => setTimeout(resolve, messageDelay));
       }
     } catch (error) {
       console.error(`Ошибка отправки на ${contact.number}:`, error);
-      contact.messageStatus = 'error';
-      contact.messageError = error.message;
-      fs.writeFileSync(jsonFilePath, JSON.stringify(contacts, null, 2));
+      
+      // Обновляем статус ошибки в полном списке контактов
+      allContacts[contactIndex].messageStatus = 'error';
+      allContacts[contactIndex].messageError = error.message;
+      
+      // Сохраняем полный список контактов в JSON-файл
+      fs.writeFileSync(jsonFilePath, JSON.stringify(allContacts, null, 2));
       
       // Обновляем прогресс после ошибки
-      const sentCount = contacts.filter(c => c.messageStatus === 'sent').length;
-      const errorCount = contacts.filter(c => c.messageStatus === 'error').length;
+      const currentSentCount = allContacts.filter(c => c.messageStatus === 'sent').length;
+      const currentErrorCount = allContacts.filter(c => c.messageStatus === 'error').length;
       
       setMessageProgress({ 
-        total: contacts.length, 
-        sent: sentCount, 
-        error: errorCount 
+        total: totalForProgress, 
+        sent: currentSentCount, 
+        error: currentErrorCount 
       });
     }
   }
